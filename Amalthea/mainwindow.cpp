@@ -3,6 +3,7 @@
 #include <QDebug>
 #include <QMessageBox>
 
+
 BOOL MainWindow::IsAdmin() const
 {
     return IsUserAnAdmin();
@@ -16,10 +17,16 @@ MainWindow::MainWindow(QWidget *parent) :
    if(!IsAdmin()){
        this->hide();
        QMessageBox msg(this);
-       msg.setText("Потрібні права адміністратора!");
+       msg.setText("Для коректної роботи програмі необхідні права адміністратора!");
        msg.exec();
        this->no = true;
-       qApp->exit(-1);
+       ShellExecute(NULL,
+           L"runas",
+           qApp->applicationFilePath().toStdWString().c_str(),
+           L"",
+           NULL,                        // default dir
+           SW_SHOWNORMAL
+       );
        return;
    }
 

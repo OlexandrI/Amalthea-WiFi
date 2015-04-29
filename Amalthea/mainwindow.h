@@ -13,7 +13,6 @@
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "Wlanapi.lib")
 #pragma comment(lib, "IPHLPAPI.lib")
-#pragma comment(lib, "Advapi32.lib")
 
 namespace Ui {
 class MainWindow;
