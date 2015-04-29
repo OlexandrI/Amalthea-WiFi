@@ -8,14 +8,18 @@
 #include <wlanapi.h>
 #include <windows.h>
 #include <iphlpapi.h>
+#include <Shlobj.h>
 
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "Wlanapi.lib")
 #pragma comment(lib, "IPHLPAPI.lib")
+#pragma comment(lib, "Advapi32.lib")
 
 namespace Ui {
 class MainWindow;
 }
+
+#define BUFF_SIZE   1024
 
 class MainWindow : public QMainWindow
 {
@@ -27,7 +31,12 @@ public:
 
     int checkWlanHosteed();
 
+    QString getErrorMsg(int ErrCode);
+    BOOL IsAdmin() const;
+
     //int setAllow();
+
+    bool no;
 
 private:
     Ui::MainWindow *ui;

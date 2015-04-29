@@ -1,38 +1,24 @@
-#include "mainwindow.h"
-#include "ui_mainwindow.h"
-#include <QDebug>
-#include <QMessageBox>
+#include "home.h"
+#include "ui_home.h"
 
-BOOL MainWindow::IsAdmin() const
+Home::Home(QWidget *parent) :
+    QDialog(parent),
+    ui(new Ui::Home)
 {
-    return IsUserAnAdmin();
+    ui->setupUi(this);
+
+    int res = checkWlanHosteed();
+    QString msg = getErrorMsg(res);
+    ui->textBrowser->setPlainText(msg);
+    qDebug() << msg;
 }
 
-MainWindow::MainWindow(QWidget *parent) :
-    QMainWindow(parent),
-    ui(new Ui::MainWindow),
-    no(false)
+Home::~Home()
 {
-   if(!IsAdmin()){
-       this->hide();
-       QMessageBox msg(this);
-       msg.setText("Потрібні права адміністратора!");
-       msg.exec();
-       this->no = true;
-       qApp->exit(-1);
-       return;
-   }
-
-   ui->setupUi(this);
-
-   int res = checkWlanHosteed();
-   QString msg = QString("%2\r\n%1").arg(getErrorMsg(res)).arg((!IsAdmin())?"is not Admin :(":"is Admin :)");
-   ui->textBrowser->setPlainText(msg);
-   qDebug() << msg;
-
+    delete ui;
 }
 
-QString MainWindow::getErrorMsg(int ErrCode){
+QString Home::getErrorMsg(int ErrCode){
     switch(ErrCode){
     case 0:
         return "All is ok :)";
@@ -57,7 +43,7 @@ QString MainWindow::getErrorMsg(int ErrCode){
     return "Unknown error";
 }
 
-int MainWindow::checkWlanHosteed(){
+int Home::checkWlanHosteed(){
     DWORD dwError = 0;
     DWORD dwServiceVersion = 0;
     HANDLE hClient = NULL;
@@ -166,9 +152,4 @@ int MainWindow::checkWlanHosteed(){
     }
 
     return 0;
-}
-
-MainWindow::~MainWindow()
-{
-    delete ui;
 }
