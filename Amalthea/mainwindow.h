@@ -9,10 +9,17 @@
 #include <windows.h>
 #include <iphlpapi.h>
 #include <Shlobj.h>
+#include <NetCon.h>
+#include <Objbase.h>
+#include <comutil.h>
 
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "Wlanapi.lib")
 #pragma comment(lib, "IPHLPAPI.lib")
+#pragma comment(lib, "Ole32.lib")
+#pragma comment(lib, "oleaut32.lib")
+#pragma comment(lib, "strmiids.lib")
+#pragma comment(lib, "comsuppw.lib")
 
 namespace Ui {
 class MainWindow;

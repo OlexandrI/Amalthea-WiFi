@@ -4,10 +4,106 @@
 #include <QMessageBox>
 
 
+#define NAT_PROTOCOL_TCP 6
+#define NAT_PROTOCOL_UDP 17
+
+#define ICS_Error_FailGetEvery -32
+#define ICS_Error_FailGetNewEnum -33
+#define ICS_Error_FailGetEnumVariant -34
+#define ICS_Error_EnableSharing -35
+
+
 BOOL MainWindow::IsAdmin() const
 {
     return IsUserAnAdmin();
 }
+
+HRESULT DoTheWork (INetSharingManager * pNSM)
+{   // add a port mapping to every firewalled or shared connection
+
+    INetSharingEveryConnectionCollection * pNSECC = NULL;
+    HRESULT hr = pNSM->get_EnumEveryConnection (&pNSECC);
+    int LastErrorCode = 0;
+    if (!pNSECC)
+        return ICS_Error_FailGetEvery;
+    else {
+
+        // enumerate connections
+        IEnumVARIANT * pEV = NULL;
+        IUnknown * pUnk = NULL;
+        hr = pNSECC->get__NewEnum (&pUnk);
+        if (pUnk) {
+            hr = pUnk->QueryInterface (__uuidof(IEnumVARIANT),
+                                       (void**)&pEV);
+            pUnk->Release();
+        }else{
+            return ICS_Error_FailGetNewEnum;
+        }
+        if (pEV) {
+            VARIANT v;
+            VariantInit (&v);
+            while (S_OK == pEV->Next (1, &v, NULL)) {
+                if (V_VT (&v) == VT_UNKNOWN) {
+                    INetConnection * pNC = NULL;
+                    V_UNKNOWN (&v)->QueryInterface
+                            (__uuidof(INetConnection),
+                             (void**)&pNC);
+                    if (pNC) {
+                        INetConnectionProps * pNCP = NULL;
+                        pNSM->get_NetConnectionProps (pNC, &pNCP);
+                        if (!pNCP)
+                            wprintf (L"failed to get NetConnectionProps!\r\n");
+                                     else {
+                                         // check properties for firewalled or shared connection
+                                         NETCON_MEDIATYPE MediaType;
+                                         pNCP->get_MediaType(&MediaType);
+                                         NETCON_STATUS Status;
+                                         pNCP->get_Status(&Status);
+                                         BSTR DevName;
+                                         pNCP->get_DeviceName(&DevName);
+
+                                         if (MediaType & (NCM_LAN | NCM_SHAREDACCESSHOST_LAN | NCM_PHONE)
+                                                 && Status == NCS_CONNECTED
+                                                 && QString(_com_util::ConvertBSTRToString(DevName)).indexOf("hosted network", 0, Qt::CaseInsensitive)==-1
+                                                 && QString(_com_util::ConvertBSTRToString(DevName)).indexOf("virtual", 0, Qt::CaseInsensitive)==-1
+                                                 && QString(_com_util::ConvertBSTRToString(DevName)).indexOf("teamviewer", 0, Qt::CaseInsensitive)==-1) {
+                                                 // got a shared/firewalled connection
+                                                 INetSharingConfiguration * pNSC = NULL;
+                                                 hr = pNSM->get_INetSharingConfigurationForINetConnection (pNC, &pNSC);
+                                                 if (!pNSC)
+                                                 wprintf (L"can't make INetSharingConfiguration object!\r\n");
+                                                 else {
+                                                     hr = pNSC->EnableSharing(ICSSHARINGTYPE_PRIVATE);
+                                                     if(hr!=S_OK){
+                                                         LastErrorCode = ICS_Error_EnableSharing;
+                                                     }else{
+                                                         BSTR Name;
+                                                         pNCP->get_Name(&Name);
+                                                         QMessageBox msg;
+                                                         msg.setText(QString("Network: %1 %2 %3").arg(_com_util::ConvertBSTRToString(Name)).arg(_com_util::ConvertBSTRToString(DevName)).arg(Status));
+                                                         msg.exec();
+                                                         return 0;
+                                                     }
+                                                     pNSC->Release();
+                                                 }
+                                         }
+                                         pNCP->Release();
+                                     }
+                                     pNC->Release();
+                    }
+                }
+                VariantClear (&v);
+            }
+            pEV->Release();
+        }else{
+            return ICS_Error_FailGetEnumVariant;
+        }
+        pNSECC->Release();
+    }
+    if(LastErrorCode!=0) return LastErrorCode;
+    return hr;
+}
+
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -59,6 +155,14 @@ QString MainWindow::getErrorMsg(int ErrCode){
         return "The request is not supported. This error is returned if the application calls the WlanHostedNetworkSetProperty function with the OpCode parameter set to wlan_hosted_network_opcode_station_profile or wlan_hosted_network_opcode_security_settings.";
     case ERROR_SERVICE_NOT_ACTIVE:
         return "The service has not been started. This error is returned if the WLAN AutoConfig Service is not running.";
+    case ICS_Error_FailGetEvery:
+        return "failed to get EveryConnectionCollection!";
+    case ICS_Error_FailGetNewEnum:
+        return "ICSError failed to get NewEnum";
+    case ICS_Error_FailGetEnumVariant:
+        return "ICSError failed to get EnumVariant";
+    case ICS_Error_EnableSharing:
+        return "ICSError failed to enable sharring";
     }
 
     return "Unknown error";
@@ -172,8 +276,70 @@ int MainWindow::checkWlanHosteed(){
         return dwReturnValue;
     }
 
+
+
+    /*PIP_ADAPTER_INFO pAdapterInfo;
+      pAdapterInfo = (IP_ADAPTER_INFO *) malloc(sizeof(IP_ADAPTER_INFO));
+      ULONG buflen = sizeof(IP_ADAPTER_INFO);
+
+      if(GetAdaptersInfo(pAdapterInfo, &buflen) == ERROR_BUFFER_OVERFLOW) {
+        free(pAdapterInfo);
+        pAdapterInfo = (IP_ADAPTER_INFO *) malloc(buflen);
+      }
+
+      if(GetAdaptersInfo(pAdapterInfo, &buflen) == NO_ERROR) {
+        PIP_ADAPTER_INFO pAdapter = pAdapterInfo;
+        while (pAdapter) {
+          QString str = QString("\tAdapter Name: \t%1\n\
+\tAdapter Desc: \t%2\n\
+\tIP Address: \t%3\n\
+\tGateway: \t%4\n").arg(pAdapter->AdapterName)
+                  .arg(pAdapter->Description)
+                  //.arg((byte*)pAdapter->Address)
+                  .arg(pAdapter->IpAddressList.IpAddress.String)
+                  .arg(pAdapter->GatewayList.IpAddress.String);
+          pAdapter = pAdapter->Next;
+          QMessageBox msg(this);
+          msg.setText(str);
+          msg.exec();
+        }
+      } else {
+        printf("Call to GetAdaptersInfo failed.\n");
+      }*/
+
+
+
+    CoInitialize (NULL);
+
+    // init security to enum RAS connections
+    CoInitializeSecurity (NULL, -1, NULL, NULL,
+                          RPC_C_AUTHN_LEVEL_PKT,
+                          RPC_C_IMP_LEVEL_IMPERSONATE,
+                          NULL, EOAC_NONE, NULL);
+
+    INetSharingManager * pNSM = NULL;
+    HRESULT hr = ::CoCreateInstance (__uuidof(NetSharingManager),
+                                     NULL,
+                                     CLSCTX_ALL,
+                                     __uuidof(INetSharingManager),
+                                     (void**)&pNSM);
+    if(hr == S_OK){
+            // in case it exists already
+            //DeletePortMapping (pNSM, NAT_PROTOCOL_TCP, 555);
+
+            // add a port mapping to every shared or firewalled connection.
+                    hr = DoTheWork (pNSM);
+                   pNSM->Release();
+            if (hr!= S_OK){
+                return hr;
+            }
+
+    }else return hr;
+
     return 0;
 }
+
+
 
 MainWindow::~MainWindow()
 {
